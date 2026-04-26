@@ -224,25 +224,52 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let stickyResult = "Invalid Image";
+    // Global variable to keep track
+    let currentGlobalLabel = "Invalid Image";
 
+    // 1. SAVE FUNCTION: Ab ye Firestore mein selection save karega
     function save(label, displayName, btn) {
-        stickyResult = label;
-        document.getElementById('selected-name-display').innerText = displayName;
+        // UI Update (Immediate feedback)
+        updateUI(displayName, btn);
 
-        const btns = document.querySelectorAll('button');
-        btns.forEach(b => b.classList.remove('selected-btn'));
-        btn.classList.add('selected-btn');
+        // Firestore mein master selection update karein taake phone aur laptop sync ho jayein
+        db.collection("demo_control").doc("selection").set({
+            label: label,
+            displayName: displayName
+        });
     }
 
+    // UI helper function
+    function updateUI(displayName, btnOrLabel) {
+        document.getElementById('selected-name-display').innerText = displayName;
+        const btns = document.querySelectorAll('button');
+        btns.forEach(b => {
+            b.classList.remove('selected-btn');
+            // Agar text match kare toh highlight karein (for auto-sync)
+            if(b.innerText === displayName) b.classList.add('selected-btn');
+        });
+    }
+
+    // 2. SYNC LISTENER: Selection sync karne ke liye
+    db.collection("demo_control").doc("selection").onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            currentGlobalLabel = data.label;
+            updateUI(data.displayName, data.displayName);
+        }
+    });
+
+    // 3. DEMO CONTROL LISTENER: Jab app se request aaye
     db.collection("demo_control").doc("current").onSnapshot((doc) => {
         const data = doc.data();
         const indicator = document.getElementById('link-indicator');
         
         if (data && data.status === 'pending') {
             indicator.classList.add('signal-on');
+            
+            // Hamesha currentGlobalLabel bhejien jo sync ho chuka hai
             db.collection("demo_control").doc("current").update({
-                label: stickyResult,
+                label: currentGlobalLabel,
                 status: 'completed'
             });
         } else {
